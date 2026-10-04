@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  CASHIER
+  STAFF
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum StockAdjustmentType {
+  IN
+  OUT
+  ADJUST
+  INITIAL
+  SALE
+  RETURN
+  DAMAGE
+  CORRECTION
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MOBILE_MONEY
+  BANK_TRANSFER
+  OTHER
+}
+
+enum AlertType {
+  LOW_STOCK
+  OUT_OF_STOCK
+  EXPIRY
+  REORDER
+  OTHER
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(STAFF)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales       Sale[]
+  adjustments StockAdjustment[]
+  alerts      Alert[]
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+}
+
+model Brand {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+}
+
+model Supplier {
+  id          String   @id @default(uuid())
+  name        String
+  contact     String?
+  email       String?
+  phone       String?
+  address     String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  products Product[]
+}
+
+model Product {
+  id           String        @id @default(uuid())
+  name         String
+  sku          String        @unique
+  description  String?       @db.Text
+  categoryId   String
+  brandId      String?
+  supplierId   String?
+  costPrice    Decimal       @db.Decimal(10, 2)
+  sellingPrice Decimal       @db.Decimal(10, 2)
+  quantity     Int           @default(0)
+  reorderLevel Int           @default(5)
+  isActive     Boolean       @default(true)
+  status       ProductStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  category     Category           @relation(fields: [categoryId], references: [id])
+  brand        Brand?             @relation(fields: [brandId], references: [id])
+  supplier     Supplier?          @relation(fields: [supplierId], references: [id])
+  saleItems    SaleItem[]
+  adjustments  StockAdjustment[]
+
+  @@index([sku])
+  @@index([name])
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([isActive])
+  @@index([quantity])
+}
+
+model Sale {
+  id            String        @id @default(uuid())
+  saleNumber    String        @unique
+  subtotal      Decimal       @db.Decimal(10, 2)
+  tax           Decimal       @default(0) @db.Decimal(10, 2)
+  discount      Decimal       @default(0) @db.Decimal(10, 2)
+  total         Decimal       @db.Decimal(10, 2)
+  profit        Decimal       @db.Decimal(10, 2)
+  paymentMethod PaymentMethod @default(CASH)
+  notes         String?       @db.Text
+  soldById      String
+  soldAt        DateTime      @default(now())
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  soldBy    User       @relation(fields: [soldById], references: [id])
+  saleItems SaleItem[]
+
+  @@index([soldAt])
+  @@index([saleNumber])
+}
+
+model SaleItem {
+  id         String   @id @default(uuid())
+  saleId     String
+  productId  String
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  costPrice  Decimal  @db.Decimal(10, 2)
+  totalPrice Decimal  @db.Decimal(10, 2)
+  profit     Decimal  @db.Decimal(10, 2)
+  createdAt  DateTime @default(now())
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model StockAdjustment {
+  id           String              @id @default(uuid())
+  productId    String
+  adjustmentType StockAdjustmentType
+  quantity     Int
+  previousQty  Int
+  newQty       Int
+  reason       String              @db.Text
+  notes        String?             @db.Text
+  adjustedById String
+  createdAt    DateTime            @default(now())
+
+  product    Product @relation(fields: [productId], references: [id])
+  adjustedBy User    @relation(fields: [adjustedById], references: [id])
+
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model Alert {
+  id        String      @id @default(uuid())
+  title     String
+  message   String      @db.Text
+  type      AlertType
+  status    AlertStatus @default(ACTIVE)
+  productId String?
+  data      Json?
+  userId    String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  resolvedAt DateTime?
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+}
